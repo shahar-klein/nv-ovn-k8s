@@ -15,6 +15,12 @@
 			"revision": ""
 		},
 		{
+			"checksumSHA1": "k5mgngHfCgUYz7SVjyWLYiqPAnk=",
+			"path": "github.com/Mellanox/sriovnet",
+			"revision": "fbd1a9d10d0113df9e2de497f37dec9535f2ff7c",
+			"revisionTime": "2018-10-23T09:26:15Z"
+		},
+		{
 			"checksumSHA1": "LvjTFR2Am01kquJNDnfISncPfRw=",
 			"path": "github.com/containernetworking/cni/pkg/skel",
 			"revision": "909fe7d10d98ab99b9990966796316249c83b263",
@@ -73,6 +79,12 @@
 			"path": "github.com/openshift/origin/pkg/util/netutils",
 			"revision": "6dc51d9f9ba52600fe01b581c6f082b75af4dd0f",
 			"revisionTime": "2018-01-04T21:32:13Z"
+		},
+		{
+			"checksumSHA1": "Tutue3nEgM/87jitUcYv6ODwyNE=",
+			"path": "github.com/satori/go.uuid",
+			"revision": "b2ce2384e17bbe0c6d34077efa39dbab3e09123b",
+			"revisionTime": "2018-10-28T12:50:25Z"
 		},
 		{
 			"checksumSHA1": "QptO0AepiRNzesHimvUfeXmJp/c=",
@@ -191,5 +203,5 @@
 			"revision": ""
 		}
 	],
-	"rootPath": "github.com/openvswitch/ovn-kubernetes/go-controller"
+	"rootPath": "ovn-kubernetes/go-controller"
 }

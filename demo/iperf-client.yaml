@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: iperfk8s-client
+  namespace: default
+spec:
+  containers:
+  - image: shaharklein/ub-iperf:latest
+    securityContext:
+      privileged: true
+    resources:
+      limits:
+        rdma/vhca: 1
+    command:
+      - sleep
+      - "3600"
+    imagePullPolicy: IfNotPresent
+    name: ubuntu-iperf
+    env:
+#    command: ["/usr/bin/iperf"]
+#    args: ["-c 10.244.0.5 -i 1 -t 3000"]
+

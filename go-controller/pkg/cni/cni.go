@@ -61,6 +61,11 @@ func extractPodBandwidthResources(podAnnotations map[string]string) (int64, int6
 func (pr *PodRequest) cmdAdd() *PodResult {
 	namespace := pr.PodNamespace
 	podName := pr.PodName
+	netconf := pr.CNIConf
+	var ovnpf string
+	var ovnstr string
+	sriovonly := false
+
 	if namespace == "" || podName == "" {
 		logrus.Errorf("required CNI variable missing")
 		return nil
@@ -73,6 +78,17 @@ func (pr *PodRequest) cmdAdd() *PodResult {
 	}
 	kubecli := &kube.Kube{KClient: clientset}
 
+	// Assume default is "ovn", if netname is not specified.
+	ovnpf = ""
+	ovnstr = "ovn"
+
+	if netconf.NETNAME != "" {
+		ovnstr = netconf.NETNAME
+	}
+
+	// XXX-TODOS
+	// For the default, we could use IF0 to indicate onpf.
+
 	// Get the IP address and MAC address from the API server.
 	// Exponential back off ~32 seconds + 7* t(api call)
 	var annotationBackoff = wait.Backoff{Duration: 1 * time.Second, Steps: 7, Factor: 1.5, Jitter: 0.1}
@@ -84,7 +100,7 @@ func (pr *PodRequest) cmdAdd() *PodResult {
 			logrus.Warningf("Error while obtaining pod annotations - %v", err)
 			return false, nil
 		}
-		if _, ok := annotation["ovn"]; ok {
+		if _, ok := annotation[ovnstr]; ok {
 			return true, nil
 		}
 		return false, nil
@@ -93,7 +109,7 @@ func (pr *PodRequest) cmdAdd() *PodResult {
 		return nil
 	}
 
-	ovnAnnotation, ok := annotation["ovn"]
+	ovnAnnotation, ok := annotation[ovnstr]
 	if !ok {
 		logrus.Errorf("failed to get ovn annotation from pod")
 		return nil
@@ -109,6 +125,11 @@ func (pr *PodRequest) cmdAdd() *PodResult {
 	ipAddress := ovnAnnotatedMap["ip_address"]
 	macAddress := ovnAnnotatedMap["mac_address"]
 	gatewayIP := ovnAnnotatedMap["gateway_ip"]
+	network_subnet := ovnAnnotatedMap["network_subnet"]
+	ovnpf = ovnAnnotatedMap["sriov_pf"]
+	if ovnAnnotatedMap["sriov_only"] == "yes" {
+		sriovonly = true
+	}
 
 	if ipAddress == "" || macAddress == "" || gatewayIP == "" {
 		logrus.Errorf("failed in pod annotation key extract")
@@ -122,7 +143,7 @@ func (pr *PodRequest) cmdAdd() *PodResult {
 	}
 
 	var interfacesArray []*current.Interface
-	interfacesArray, err = pr.ConfigureInterface(namespace, podName, macAddress, ipAddress, gatewayIP, config.Default.MTU, ingress, egress)
+	interfacesArray, err = pr.ConfigureInterface(namespace, podName, macAddress, ipAddress, gatewayIP, config.Default.MTU, ingress, egress, ovnpf, sriovonly, ovnstr, network_subnet)
 	if err != nil {
 		logrus.Errorf("Failed to configure interface in pod: %v", err)
 		return nil

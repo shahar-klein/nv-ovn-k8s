@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iperf-server-deployment
+  labels:
+    app: iperf-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: iperf-server
+  template:
+    metadata:
+      labels:
+        app: iperf-server
+    spec:
+      containers:
+      - name: iperf-server
+        image: shaharklein/ub-iperf:latest
+        securityContext:
+          privileged: true
+        resources:
+          limits:
+            rdma/vhca: 1
+        ports:
+        - containerPort: 5001
+        env:
+        command: ["/usr/bin/iperf"]
+        args: ["-s"]
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: iperf-server-service
+spec:
+  selector:
+    app: iperf-server
+  ports:
+  - protocol: TCP
+    port: 10005
+    targetPort: 5001

@@ -154,7 +154,7 @@ var _ = Describe("Gateway Init Operations", func() {
 
 			ipt, err := util.NewFakeWithProtocol(iptables.ProtocolIPv4)
 			Expect(err).NotTo(HaveOccurred())
-			err = initLocalnetGatewayInternal(nodeName, []string{clusterCIDR}, nodeSubnet, ipt, true)
+			err = initLocalnetGatewayInternal(nodeName, "ovn", []string{clusterCIDR}, nodeSubnet, ipt, true)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(fexec.CommandCalls).To(Equal(len(fakeCmds)))

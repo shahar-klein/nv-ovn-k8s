@@ -67,6 +67,10 @@ type NetConf struct {
 		Type string `json:"type,omitempty"`
 	} `json:"ipam,omitempty"`
 	DNS DNS `json:"dns"`
+	IF0          string `json:"if0"`
+        IF0NAME     string `json:"if0name"`
+	// XXX TODOS : maybe just use "Name" above for this purpose
+        NETNAME     string `json:"network-name"`
 }
 
 // NetConfList describes an ordered list of networks.

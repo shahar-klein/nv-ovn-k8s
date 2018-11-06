@@ -20,6 +20,7 @@ type Interface interface {
 	SetAnnotationOnNode(node *kapi.Node, key, value string) error
 	SetAnnotationOnNamespace(ns *kapi.Namespace, key, value string) error
 	GetAnnotationsOnPod(namespace, name string) (map[string]string, error)
+	GetAnnotationsOnNode(name string) (map[string]string, error)
 	GetPod(namespace, name string) (*kapi.Pod, error)
 	GetPods(namespace string) (*kapi.PodList, error)
 	GetPodsByLabels(namespace string, selector labels.Selector) (*kapi.PodList, error)
@@ -83,6 +84,16 @@ func (k *Kube) GetAnnotationsOnPod(namespace, name string) (map[string]string, e
 		return nil, err
 	}
 	return pod.ObjectMeta.Annotations, nil
+}
+
+
+func (k *Kube) GetAnnotationsOnNode(name string) (map[string]string, error) {
+	node, err := k.KClient.Core().Nodes().Get(name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return node.ObjectMeta.Annotations, nil
+
 }
 
 // GetPod obtains the Pod resource from kubernetes apiserver, given the name and namespace

@@ -6,6 +6,7 @@ import (
 	"net"
 	"runtime"
 	"strings"
+	"strconv"
 )
 
 // GetK8sClusterRouter returns back the OVN distibuted router
@@ -105,9 +106,12 @@ func generateGatewayIP() (string, error) {
 }
 
 // GatewayInit creates a gateway router for the local chassis.
-func GatewayInit(clusterIPSubnet []string, nodeName, nicIP, physicalInterface,
+func GatewayInit(clusterIPSubnet []string, nodeName, netname, nicIP, physicalInterface,
 	bridgeInterface, defaultGW, rampoutIPSubnet string,
-	gatewayLBEnable bool) error {
+	gatewayLBEnable bool, vlanid uint32) error {
+
+	nodenetName := fmt.Sprintf("%s-%s", nodeName, netname)
+	nodenetName = strings.ToLower(nodenetName)
 
 	ip, physicalIPNet, err := net.ParseCIDR(nicIP)
 	if err != nil {
@@ -133,10 +137,10 @@ func GatewayInit(clusterIPSubnet []string, nodeName, nicIP, physicalInterface,
 	}
 
 	// Create a gateway router.
-	gatewayRouter := "GR_" + nodeName
+	gatewayRouter := "GR_" + nodenetName
 	stdout, stderr, err := RunOVNNbctl("--", "--may-exist", "lr-add",
 		gatewayRouter, "--", "set", "logical_router", gatewayRouter,
-		"options:chassis="+systemID, "external_ids:physical_ip="+physicalIP)
+		"options:chassis="+systemID, "external_ids:physical_ip="+physicalIP, "external_ids:nodename="+nodeName)
 	if err != nil {
 		return fmt.Errorf("Failed to create logical router %v, stdout: %q, "+
 			"stderr: %q, error: %v", gatewayRouter, stdout, stderr, err)
@@ -277,9 +281,9 @@ func GatewayInit(clusterIPSubnet []string, nodeName, nicIP, physicalInterface,
 	}
 
 	// Create the external switch for the physical interface to connect to.
-	externalSwitch := "ext_" + nodeName
+	externalSwitch := "ext_" + nodenetName
 	stdout, stderr, err = RunOVNNbctl("--may-exist", "ls-add",
-		externalSwitch)
+		externalSwitch, "--", "set", "logical_switch", externalSwitch, "external-ids:nodename="+nodeName)
 	if err != nil {
 		return fmt.Errorf("Failed to create logical switch, stdout: %q, "+
 			"stderr: %q, error: %v", stdout, stderr, err)
@@ -288,7 +292,7 @@ func GatewayInit(clusterIPSubnet []string, nodeName, nicIP, physicalInterface,
 	var ifaceID, macAddress string
 	if physicalInterface != "" {
 		// Connect physical interface to br-int. Get its mac address.
-		ifaceID = physicalInterface + "_" + nodeName
+		ifaceID = physicalInterface + "_" + nodenetName
 		stdout, stderr, err = RunOVSVsctl("--", "--may-exist", "add-port",
 			"br-int", physicalInterface, "--", "set", "interface",
 			physicalInterface, "external-ids:iface-id="+ifaceID)
@@ -332,7 +336,7 @@ func GatewayInit(clusterIPSubnet []string, nodeName, nicIP, physicalInterface,
 			return fmt.Errorf("Failed to set bridge, stdout: %q, stderr: %q, "+
 				"error: %v", stdout, stderr, err)
 		}
-		ifaceID = bridgeInterface + "_" + nodeName
+		ifaceID = bridgeInterface + "_" + nodenetName
 
 		// Connect bridge interface to br-int via patch ports.
 		patch1 := "k8s-patch-br-int-" + bridgeInterface
@@ -358,8 +362,14 @@ func GatewayInit(clusterIPSubnet []string, nodeName, nicIP, physicalInterface,
 	// Add external interface as a logical port to external_switch.
 	// This is a learning switch port with "unknown" address. The external
 	// world is accessed via this port.
-	stdout, stderr, err = RunOVNNbctl("--", "--may-exist", "lsp-add",
-		externalSwitch, ifaceID, "--", "lsp-set-addresses", ifaceID, "unknown")
+	if vlanid == 0 {
+		stdout, stderr, err = RunOVNNbctl("--", "--may-exist", "lsp-add",
+			externalSwitch, ifaceID, "--", "lsp-set-addresses", ifaceID, "unknown")
+	} else {
+		vlanstr := strconv.Itoa(int(vlanid))
+		stdout, stderr, err = RunOVNNbctl("--", "--may-exist", "lsp-add",
+			externalSwitch, ifaceID, "--", "set", "logical_switch_port", ifaceID, "addresses=unknown", "tag_request="+vlanstr)
+	}
 	if err != nil {
 		return fmt.Errorf("Failed to add logical port to switch, stdout: %q, "+
 			"stderr: %q, error: %v", stdout, stderr, err)

@@ -3,6 +3,7 @@ package cluster
 import (
 	"fmt"
 	"net"
+	"strings"
 
 	"github.com/openshift/origin/pkg/util/netutils"
 	"github.com/openvswitch/ovn-kubernetes/go-controller/pkg/config"
@@ -12,23 +13,41 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+// There could be several networks in the cluster, each network is identified by
+// the name and defines the network.
+type ClusterNets struct {
+	NetworkName      string
+	NetworkSubnet    string
+	NetworkAllocate  bool
+	NetworkIPNet     []CIDRNetworkEntry
+	alreadyAllocated []string
+	masterSubnetAllocatorList  []*netutils.SubnetAllocator
+	GatewayInit      bool
+	GatewayIntf      string
+        GatewayType      string
+	GatewayBridge    string
+	GatewayNextHop   string
+	GatewayNet       string
+	L2GatewayChassis string
+	GatewaySpareIntf bool
+	LocalnetGateway  bool
+	NetVlanID        uint32
+	NodePortEnable   bool
+	NetSriovDev      string
+	NetSriovOnly     bool
+}
+
 // OvnClusterController is the object holder for utilities meant for cluster management
 type OvnClusterController struct {
 	Kube                      kube.Interface
 	watchFactory              *factory.WatchFactory
-	masterSubnetAllocatorList []*netutils.SubnetAllocator
 
 	ClusterServicesSubnet string
-	ClusterIPNet          []CIDRNetworkEntry
 
-	GatewayInit      bool
-	GatewayIntf      string
-	GatewayBridge    string
-	GatewayNextHop   string
-	GatewaySpareIntf bool
-	NodePortEnable   bool
+	// List of networks associated with the cluster
+	ClusterNetList        map[string]*ClusterNets
+
 	OvnHA            bool
-	LocalnetGateway  bool
 }
 
 // CIDRNetworkEntry is the object that holds the definition for a single network CIDR range
@@ -46,6 +65,8 @@ const (
 	MasterOverlayIP = "master_overlay_ip"
 	// OvnClusterRouter is the name of the distributed router
 	OvnClusterRouter = "ovn_cluster_router"
+	// OvnNetworks is a comma separated lists of network on the node
+	OvnNetworks = "networks"
 )
 
 // NewClusterController creates a new controller for IP subnet allocation to
@@ -76,8 +97,11 @@ func setupOVNNode(nodeName string) error {
 			return fmt.Errorf("failed to obtain local IP from hostname %q: %v", nodeName, err)
 		}
 	} else {
-		if ip := net.ParseIP(nodeIP); ip == nil {
-			return fmt.Errorf("invalid encapsulation IP provided %q", nodeIP)
+		encap_ips := strings.Split(nodeIP, ",")
+		for _, encap_ip := range encap_ips {
+			if ip := net.ParseIP(encap_ip); ip == nil {
+				return fmt.Errorf("invalid encapsulation IP provided %q", encap_ip)
+			}
 		}
 	}
 

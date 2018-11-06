@@ -2,6 +2,11 @@ package cluster
 
 import (
 	"net"
+	"fmt"
+	"strings"
+
+	"github.com/openvswitch/ovn-kubernetes/go-controller/pkg/util"
+
 )
 
 // getIPv4Address returns the ipv4 address for the network interface 'iface'.
@@ -28,42 +33,77 @@ func getIPv4Address(iface string) (string, error) {
 	return ipAddress, nil
 }
 
-func (cluster *OvnClusterController) initGateway(
-	nodeName string, clusterIPSubnet []string, subnet string) error {
-	if cluster.LocalnetGateway {
-		return initLocalnetGateway(nodeName, clusterIPSubnet, subnet,
-			cluster.NodePortEnable)
+// XXX-Experimental: TO exit out if the logical to the physical at L2. This function
+// just initializes the physical bridge on the node. We have already configured the
+// logical components for the network when setting up the networks in the master.
+func  initL2Gateway (GatewayIntf string) error {
+	_, _, err := util.RunOVSVsctl("--", "br-exists", GatewayIntf)
+	if err != nil {
+		// This is not a OVS bridge. We need to create a OVS bridge
+		// and add GatewayIntf as a port of that bridge.
+		_, err := util.NicToBridge(GatewayIntf)
+		if err != nil {
+			return fmt.Errorf("failed to convert %s to OVS bridge: %v",
+				GatewayIntf, err)
+		}
+	} else {
+		_, err = getIntfName(GatewayIntf)
+		if err != nil {
+			return fmt.Errorf("failed to get ofport for %s, error: %v",
+				GatewayIntf, err)
+		}
 	}
 
-	if cluster.GatewayNextHop == "" || cluster.GatewayIntf == "" {
+	return nil
+}
+
+func (cluster *OvnClusterController) initGateway(
+	nodeName string, clusterIPSubnet []string, subnet, netname, GatewayType, GatewayItf, GatewayNet, GatewayChassis string, vlanid uint32) error {
+
+	nodeNetName := fmt.Sprintf("%s-%s", nodeName, netname)
+	nodeNetName = strings.ToLower(nodeNetName)
+	if GatewayType == "l2localnet" || GatewayType == "l2gateway" {
+		return initL2Gateway(GatewayItf)
+	}
+
+	if GatewayType == "l3localnet" {
+		return initLocalnetGateway(nodeName, netname, clusterIPSubnet,
+			subnet, cluster.ClusterNetList[netname].NodePortEnable, vlanid)
+	}
+
+	if cluster.ClusterNetList[netname].GatewayNextHop == "" || cluster.ClusterNetList[netname].GatewayIntf == "" {
 		// We need to get the interface details from the default gateway.
-		gatewayIntf, gatewayNextHop, err := getDefaultGatewayInterfaceDetails()
+		GatewayIntf, GatewayNextHop, err := getDefaultGatewayInterfaceDetails()
 		if err != nil {
 			return err
 		}
 
-		if cluster.GatewayNextHop == "" {
-			cluster.GatewayNextHop = gatewayNextHop
+		if cluster.ClusterNetList[netname].GatewayNextHop == "" {
+			cluster.ClusterNetList[netname].GatewayNextHop = GatewayNextHop
 		}
 
-		if cluster.GatewayIntf == "" {
-			cluster.GatewayIntf = gatewayIntf
+		if cluster.ClusterNetList[netname].GatewayIntf == "" {
+			cluster.ClusterNetList[netname].GatewayIntf = GatewayIntf
 		}
 	}
 
-	if cluster.GatewaySpareIntf {
-		return initSpareGateway(nodeName, clusterIPSubnet, subnet,
-			cluster.GatewayNextHop, cluster.GatewayIntf,
-			cluster.NodePortEnable)
+	if cluster.ClusterNetList[netname].GatewaySpareIntf {
+		return initSpareGateway(nodeName, netname, clusterIPSubnet,
+			subnet, cluster.ClusterNetList[netname].GatewayNextHop,
+			cluster.ClusterNetList[netname].GatewayIntf,
+			cluster.ClusterNetList[netname].NodePortEnable, vlanid)
 	}
 
-	bridge, gwIntf, err := initSharedGateway(nodeName, clusterIPSubnet, subnet,
-		cluster.GatewayNextHop, cluster.GatewayIntf, cluster.NodePortEnable,
-		cluster.watchFactory)
+	bridge, gwIntf, err := initSharedGateway(nodeName, netname,
+		clusterIPSubnet, subnet,
+		cluster.ClusterNetList[netname].GatewayNextHop,
+		cluster.ClusterNetList[netname].GatewayIntf,
+		cluster.ClusterNetList[netname].NodePortEnable,
+		vlanid, cluster.watchFactory)
 	if err != nil {
 		return err
 	}
-	cluster.GatewayBridge = bridge
-	cluster.GatewayIntf = gwIntf
+	cluster.ClusterNetList[netname].GatewayBridge = bridge
+	cluster.ClusterNetList[netname].GatewayIntf = gwIntf
 	return nil
 }

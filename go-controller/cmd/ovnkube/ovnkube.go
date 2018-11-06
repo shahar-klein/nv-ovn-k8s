@@ -92,6 +92,11 @@ func main() {
 				"configured in the node is used. Only useful with " +
 				"\"init-gateways\"",
 		},
+		cli.StringFlag{
+			Name: "gateway-vlan",
+			Usage: "The VLAN to be used in the physical network " +
+				"\"gateway-vlanid\"",
+		},
 		cli.BoolFlag{
 			Name: "gateway-spare-interface",
 			Usage: "If true, assumes that \"gateway-interface\" provided can be " +
@@ -220,17 +225,6 @@ func runOvnKube(ctx *cli.Context) error {
 	clusterController := ovncluster.NewClusterController(clientset, factory)
 
 	if master != "" || node != "" {
-		clusterController.GatewayInit = ctx.Bool("init-gateways")
-		clusterController.GatewayIntf = ctx.String("gateway-interface")
-		clusterController.GatewayNextHop = ctx.String("gateway-nexthop")
-		clusterController.GatewaySpareIntf = ctx.Bool("gateway-spare-interface")
-		clusterController.LocalnetGateway = ctx.Bool("gateway-localnet")
-		clusterController.OvnHA = ctx.Bool("ha")
-
-		clusterController.ClusterIPNet, err = parseClusterSubnetEntries(ctx.String("cluster-subnet"))
-		if err != nil {
-			panic(err.Error())
-		}
 
 		clusterServicesSubnet := ctx.String("service-cluster-ip-range")
 		if clusterServicesSubnet != "" {
@@ -242,7 +236,26 @@ func runOvnKube(ctx *cli.Context) error {
 			}
 			clusterController.ClusterServicesSubnet = servicesSubnet.String()
 		}
-		clusterController.NodePortEnable = nodePortEnable
+		clusterController.ClusterNetList = make(map[string]*ovncluster.ClusterNets)
+		gateway_type := ""
+		if  ctx.Bool("init-gateways") {
+			gateway_type = "l3gateway"
+			if ctx.Bool("gateway-localnet") {
+				gateway_type = "l3localnet"
+			}
+		}
+		vid := uint32(0)
+		if ctx.String("gateway-vlan") != "" {
+			vlanid, err := strconv.Atoi(ctx.String("gateway-vlan"))
+			if err != nil {
+				vid = uint32(vlanid)
+			}
+		}
+		clusterController.ClusterNetList["ovn"] = &ovncluster.ClusterNets{NetworkSubnet: ctx.String("cluster-subnet"), NetworkAllocate: true, GatewayInit: ctx.Bool("init-gateways"), GatewayIntf: ctx.String("gateway-interface"), GatewayNextHop: ctx.String("gateway-nexthop"), GatewaySpareIntf: ctx.Bool("gateway-spare-interface"), GatewayType: gateway_type, NodePortEnable: nodePortEnable, NetVlanID: vid}
+		clusterController.ClusterNetList["ovn"].NetworkIPNet, err = parseClusterSubnetEntries(ctx.String("cluster-subnet"))
+		if err != nil {
+			panic(err.Error())
+		}
 
 		if master != "" {
 			if runtime.GOOS == "windows" {

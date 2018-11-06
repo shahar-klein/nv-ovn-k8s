@@ -22,6 +22,7 @@ fedora: bld daemonsetyaml
 
 ubuntu: bld daemonsetyaml
 	docker build -t ovn-kube-u -f Dockerfile.ubuntu .
+	#docker build -t ovn-kube-u -f Dockerfile.ubuntu . --build-arg NVBUILDCOMMIT=6bf19aa6edb3
 
 # This target expands the daemonset yaml templates into final form
 # It gets the image name from ../ansible/hosts
